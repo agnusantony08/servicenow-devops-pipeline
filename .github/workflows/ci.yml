@@ -1,0 +1,98 @@
+name: CI-CD with ServiceNow
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: servicenow-devops-pipeline:ci
+  SN_INSTANCE: ${{ secrets.SN_INSTANCE }}
+  SN_USER: ${{ secrets.SN_USER }}
+  SN_PASSWORD: ${{ secrets.SN_PASSWORD }}
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run tests
+        run: pytest -v
+
+  build-scan:
+    needs: test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t "$IMAGE" .
+
+      - name: Scan image with Trivy (fail on HIGH/CRITICAL)
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            ghcr.io/aquasecurity/trivy:0.69.3 \
+            image --severity HIGH,CRITICAL --exit-code 1 \
+            --ignore-unfixed --no-progress "$IMAGE"
+
+  open-change:
+    needs: build-scan
+    runs-on: ubuntu-24.04
+    outputs:
+      sys_id: ${{ steps.change.outputs.sys_id }}
+      number: ${{ steps.change.outputs.number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Open ServiceNow change request
+        id: change
+        run: python scripts/servicenow.py open-change
+
+  deploy-staging:
+    needs: open-change
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t "$IMAGE" .
+
+      - name: Deploy to staging (run the container)
+        run: docker run -d --name staging -p 8080:8080 "$IMAGE"
+
+      - name: Staging smoke test /health
+        run: |
+          sleep 5
+          curl -fsS http://localhost:8080/health
+
+  close-change:
+    needs: [open-change, deploy-staging]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Close ServiceNow change request
+        env:
+          CHANGE_SYS_ID: ${{ needs.open-change.outputs.sys_id }}
+        run: python scripts/servicenow.py close-change
+
+  open-incident-on-failure:
+    needs: [test, build-scan, open-change, deploy-staging, close-change]
+    if: failure()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Open ServiceNow incident with link to the failed run
+        run: python scripts/servicenow.py open-incident
