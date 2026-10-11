@@ -30,6 +30,8 @@ def base_url():
 def call(method, path, payload=None):
     user = os.environ.get("SN_USER", "").strip()
     password = os.environ.get("SN_PASSWORD", "").strip()
+    print(f"DEBUG user={len(user)} chars, password={len(password)} chars", file=sys.stderr)
+
     if not user or not password:
         fail("SN_USER / SN_PASSWORD are not set (add them as GitHub secrets)")
 
