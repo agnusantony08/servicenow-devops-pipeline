@@ -4,11 +4,6 @@ Commands:
   open-change    create a change request, print its number and sys_id
   close-change   close the change request given by $CHANGE_SYS_ID
   open-incident  create an incident that links to the failed workflow run
-
-Credentials come from environment variables (GitHub Secrets):
-  SN_INSTANCE  e.g. dev12345.service-now.com
-  SN_USER      ServiceNow user name
-  SN_PASSWORD  ServiceNow password
 """
 import base64
 import json
@@ -34,7 +29,7 @@ def base_url():
 
 def call(method, path, payload=None):
     user = os.environ.get("SN_USER", "").strip()
-password = os.environ.get("SN_PASSWORD", "").strip()
+    password = os.environ.get("SN_PASSWORD", "").strip()
     if not user or not password:
         fail("SN_USER / SN_PASSWORD are not set (add them as GitHub secrets)")
 
@@ -138,3 +133,4 @@ if __name__ == "__main__":
     if len(sys.argv) != 2 or sys.argv[1] not in COMMANDS:
         fail("usage: servicenow.py {open-change|close-change|open-incident}")
     COMMANDS[sys.argv[1]]()
+
