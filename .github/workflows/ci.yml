@@ -9,7 +9,7 @@ permissions:
 
 env:
   IMAGE: servicenow-devops-pipeline:ci
-  SN_INSTANCE: ${{ secrets.SN_INSTANCE }}
+  SN_INSTANCE: dev406771.service-now.com
   SN_USER: ${{ secrets.SN_USER }}
   SN_PASSWORD: ${{ secrets.SN_PASSWORD }}
 
